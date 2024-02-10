@@ -9,6 +9,7 @@ namespace NorthwindWebMvc.Basic.Mapping
         public MappingProfile()
         {
             CreateMap<Category, CategoryDto>().ReverseMap();
+            CreateMap<Product, ProductDto>().ReverseMap();
         }
     }
 }

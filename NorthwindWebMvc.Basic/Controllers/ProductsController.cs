@@ -1,38 +1,46 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using NorthwindWebMvc.Basic.Models;
 using NorthwindWebMvc.Basic.Models.Dto;
-using NorthwindWebMvc.Basic.Repository;
 using NorthwindWebMvc.Basic.RepositoryContext;
 using NorthwindWebMvc.Basic.Service;
-using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Localization;
 
 namespace NorthwindWebMvc.Basic.Controllers
 {
-    public class CategoriesController : Controller
+    public class ProductsController : Controller
     {
         private readonly RepositoryDbContext _context;
-
+        private readonly IProductService<ProductDto> _productService;
         private readonly ICategoryService<CategoryDto> _categoryService;
 
-        //replace RepositoryDbContext with IRepositoryBase
-        private readonly IRepositoryBase<CategoryDto> _repositoryBase;
-
-
-        public CategoriesController(ICategoryService<CategoryDto> categoryService)
+        public ProductsController(RepositoryDbContext context, IProductService<ProductDto> productService, ICategoryService<CategoryDto> categoryService)
         {
+            //_context = context;
+            _productService = productService;
             _categoryService = categoryService;
         }
 
 
-        // GET: Categories
+        // GET: Products
         public async Task<IActionResult> Index()
         {
-            return View(await _categoryService.FindAll(true));
+            var allProduct=await _productService.FindAll(false);
 
+            foreach(var item in allProduct)
+            {
+                item.Category = await _categoryService.FindById(item.CategoryId,false);
+            }
+            return View(allProduct);
         }
 
-        // GET: Categories/Details/5
+        // GET: Products/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -40,35 +48,38 @@ namespace NorthwindWebMvc.Basic.Controllers
                 return NotFound();
             }
 
-            var category = _categoryService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
+            var product = _productService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
 
-            if (category == null)
+            if (product == null)
             {
                 return NotFound();
             }
 
-            return View(category);
+            product.Category = await _categoryService.FindById(product.CategoryId,false);
+            return View(product);
         }
 
-        // GET: Categories/Create
-        public IActionResult Create()
+        // GET: Products/Create
+        public async Task<IActionResult> Create()
         {
+            var allCategory=await _categoryService.FindAll(false);
+            ViewData["CategoryId"] = new SelectList(allCategory, "Id", "CategoryName");
             return View();
         }
 
-        // POST: Categories/Create
+        // POST: Products/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("CategoryName,Description,Photo")] CategoryDtoCreate categoryDtoCreate)
+        public async Task<IActionResult> Create([Bind("Id,ProductName,Price,Stock,Photo,CategoryId")] ProductDtoCreate productDtoCreate)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-      
+
                 try
                 {
-                    var file = categoryDtoCreate.Photo;
+                    var file = productDtoCreate.Photo;
                     var folderName = Path.Combine("Resources", "Images");
                     var pathToSave = Path.Combine(Directory.GetCurrentDirectory(), folderName);
                     if (file.Length > 0)
@@ -82,14 +93,16 @@ namespace NorthwindWebMvc.Basic.Controllers
                         }
 
                         //collect data from dto dan filename
-                        var categoryDto = new CategoryDto
+                        var productDto = new ProductDto()
                         {
-                            CategoryName = categoryDtoCreate.CategoryName,
-                            Description = categoryDtoCreate.Description,
+                            ProductName=productDtoCreate.ProductName,
+                            Price = productDtoCreate.Price,
+                            Stock = productDtoCreate.Stock,
+                            CategoryId=productDtoCreate.CategoryId,
                             Photo = fileName
                         };
-                        _categoryService.Create(categoryDto);
-                        
+                        _productService.Create(productDto);
+
                         return RedirectToAction(nameof(Index));
 
                     }
@@ -101,50 +114,49 @@ namespace NorthwindWebMvc.Basic.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
-            return View(categoryDtoCreate);
+            return View(productDtoCreate);
         }
 
-        // GET: Categories/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        // GET: Products/Edit/5
+        public async Task<IActionResult> Edit(int id)
         {
             if (id == null)
             {
                 return NotFound();
             }
 
-            var category = await _categoryService.FindById((int)id, true);
-            var categoryDtoCreate = new CategoryDtoCreate
+            var product = await _productService.FindById((int)id, true);
+            var productDtoCreate = new ProductDtoCreate
+
             {
-                Id = category.Id,
-                CategoryName = category.CategoryName,
-                Description = category.Description
+                Id = product.Id,
+                ProductName = product.ProductName,
+                Price= product.Price,
+                Stock = product.Stock,
+                CategoryId=product.CategoryId,
             };
-
-            if (category == null)
-            {
-                return NotFound();
-            }
-            return View(categoryDtoCreate);
-
+            var allCategory = await _categoryService.FindAll(false);
+            ViewData["CategoryId"] = new SelectList(allCategory, "Id", "CategoryName", product.CategoryId);
+            return View(productDtoCreate);
         }
 
-        // POST: Categories/Edit/5
+        // POST: Products/Edit/5
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,CategoryName,Description,Photo")] CategoryDtoCreate categoryDtoCreate)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,ProductName,Price,Stock,Photo,CategoryId")] ProductDtoCreate productDtoCreate)
         {
-            if (id != categoryDtoCreate.Id)
+            if (id != productDtoCreate.Id)
             {
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
                 try
                 {
-                    var file = categoryDtoCreate.Photo;
+                    var file = productDtoCreate.Photo;
                     var folderName = Path.Combine("Resources", "Images");
                     var pathToSave = Path.Combine(Directory.GetCurrentDirectory(), folderName);
                     if (file.Length > 0)
@@ -158,24 +170,26 @@ namespace NorthwindWebMvc.Basic.Controllers
                         }
 
                         //collect data from dto dan filename
-                        var categoryDto = new CategoryDto
+                        var productDto = new ProductDto
                         {
-                            Id=categoryDtoCreate.Id,
-                            CategoryName = categoryDtoCreate.CategoryName,
-                            Description = categoryDtoCreate.Description,
+                            Id = productDtoCreate.Id,
+                            ProductName = productDtoCreate.ProductName,
+                            Price = productDtoCreate.Price,
+                            Stock = productDtoCreate.Stock,
+                            CategoryId = productDtoCreate.CategoryId,
                             Photo = fileName
                         };
-                        _categoryService.Update(categoryDto);
+                        _productService.Update(productDto);
 
                         return RedirectToAction(nameof(Index));
 
                     }
-                    
+
 
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!CategoryExists(categoryDtoCreate.Id))
+                    if (!await ProductExists(productDtoCreate.Id))
                     {
                         return NotFound();
                     }
@@ -186,51 +200,51 @@ namespace NorthwindWebMvc.Basic.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
-            return View(categoryDtoCreate);
+            return View(productDtoCreate);
         }
 
-        // GET: Categories/Delete/5
+        // GET: Products/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
             {
                 return NotFound();
             }
-
-            //var category = await _categoryService.FindById((int)id,true);
-
-            var category = _categoryService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
-            if (category == null)
+            var product = _productService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
+            if (product == null)
             {
                 return NotFound();
             }
 
-            return View(category);
+            var allCategory = await _categoryService.FindAll(false);
+            ViewData["CategoryId"] = new SelectList(allCategory, "Id", "CategoryName");
+            return View(product);
         }
 
-        // POST: Categories/Delete/5
+        // POST: Products/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int? id)
         {
             if (id == null)
             {
-                return Problem("Entity set 'RepositoryDbContext.Categories'  is null.");
+                return Problem("Entity set 'RepositoryDbContext.Products'  is null.");
             }
             //var category = await _categoryService.FindById((int)id,true);
-            var category = _categoryService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
-            if (category != null)
+            var product = _productService.FindAll(true).Result.FirstOrDefault(m => m.Id == id);
+            if (product != null)
             {
-                _categoryService.Delete(category);
+                _productService.Delete(product);
             }
 
             //await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool CategoryExists(int id)
+        private async Task<bool> ProductExists(int id)
         {
-            return (_categoryService.FindAll(true)?.Result.Any(e => e.Id == id)).GetValueOrDefault();
+            IEnumerable<ProductDto> prod = await _productService.FindAll(false);
+          return (prod?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }
